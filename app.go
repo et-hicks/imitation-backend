@@ -28,6 +28,14 @@ func main() {
 		t.ExecuteTemplate(w, "index.html.tmpl", data)
 	})
 
+	http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {
+		data := map[string]string{
+			"Region": os.Getenv("FLY_REGION"),
+		}
+
+		t.ExecuteTemplate(w, "about.html.tmpl", data)
+	})
+
 	log.Println("listening on", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
