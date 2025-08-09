@@ -1,7 +1,7 @@
-package main
+package api
 
 import (
-	"github.com/fly-apps/go-example/models"
+	"github.com/et-hicks/imitation-backend/models"
 )
 
 // TweetWithUser combines tweet data with its author.

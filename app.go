@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"embed"
-	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"time"
+
+	_ "github.com/et-hicks/imitation-backend/src"
 )
 
 //go:embed templates/*
@@ -48,25 +47,6 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(content)
-	})
-
-	// Database connectivity checker: query Supabase and return results as JSON
-	http.HandleFunc("/database", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		// short timeout to avoid hanging requests
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		rows, err := QueryTableAllRows(ctx, "my_table")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(rows); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	})
 
 	log.Println("listening on", port)

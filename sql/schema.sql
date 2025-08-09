@@ -31,3 +31,9 @@ CREATE TABLE IF NOT EXISTS comments (
     last_edited_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+
+-- Ensure tweets has a comments column
+ALTER TABLE IF EXISTS tweets
+ADD COLUMN IF NOT EXISTS comments INTEGER NOT NULL DEFAULT 0;

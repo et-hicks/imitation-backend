@@ -1,4 +1,4 @@
-module github.com/fly-apps/go-example
+module github.com/et-hicks/imitation-backend
 
 go 1.23.0
 

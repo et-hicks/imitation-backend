@@ -1,13 +1,14 @@
-package main
+package api
 
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/fly-apps/go-example/models"
+	"github.com/et-hicks/imitation-backend/models"
 	postgrest "github.com/supabase-community/postgrest-go"
 )
 
@@ -41,11 +42,12 @@ func tweetHandler(w http.ResponseWriter, r *http.Request) {
 
 // fetchTweet returns a specific tweet with user info.
 func fetchTweet(w http.ResponseWriter, r *http.Request, tweetID string) {
+	log.Println("inilizied request")
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -66,15 +68,17 @@ func fetchTweet(w http.ResponseWriter, r *http.Request, tweetID string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweet)
+	log.Println("sent successfully")
 }
 
 // fetchComments returns comments for a tweet.
 func fetchComments(w http.ResponseWriter, r *http.Request, tweetID string) {
+	log.Println("inilizied request")
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -91,10 +95,12 @@ func fetchComments(w http.ResponseWriter, r *http.Request, tweetID string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(comments)
+	log.Println("sent successfully")
 }
 
 // createTweet inserts a new tweet for a user.
 func createTweet(w http.ResponseWriter, r *http.Request) {
+	log.Println("inilizied request")
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -113,7 +119,7 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -137,4 +143,5 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweet)
+	log.Println("sent successfully")
 }

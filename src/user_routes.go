@@ -1,8 +1,9 @@
-package main
+package api
 
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -39,11 +40,12 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 
 // userTweets returns 10 latest tweets for the specified user.
 func userTweets(w http.ResponseWriter, r *http.Request, userID string) {
+	log.Println("inilizied request")
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -61,10 +63,12 @@ func userTweets(w http.ResponseWriter, r *http.Request, userID string) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweets)
+	log.Println("sent successfully")
 }
 
 // updateBio updates the bio for a given user.
 func updateBio(w http.ResponseWriter, r *http.Request, userID string) {
+	log.Println("inilizied request")
 	var payload struct {
 		Bio string `json:"bio"`
 	}
@@ -77,7 +81,7 @@ func updateBio(w http.ResponseWriter, r *http.Request, userID string) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -91,4 +95,5 @@ func updateBio(w http.ResponseWriter, r *http.Request, userID string) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+	log.Println("sent successfully")
 }

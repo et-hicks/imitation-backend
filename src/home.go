@@ -1,8 +1,9 @@
-package main
+package api
 
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -15,11 +16,12 @@ func init() {
 
 // homeHandler returns the 10 most recent tweets with user information.
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("inilizied request")
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := getSupabase(ctx)
+	client, err := GetSupabase(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -36,4 +38,5 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweets)
+	log.Println("sent successfully")
 }
