@@ -9,11 +9,13 @@ type User struct {
 	Username    string    `json:"username"`
 	ProfileName string    `json:"profile_name"`
 	ProfileURL  string    `json:"profile_url"`
+	Bio         string    `json:"bio"`
 }
 
 type Tweet struct {
 	ID           int       `json:"id"`
 	UserID       int       `json:"user_id"`
+	Body         string    `json:"body"`
 	Likes        int       `json:"likes"`
 	Saves        int       `json:"saves"`
 	Restacks     int       `json:"restacks"`
@@ -27,6 +29,7 @@ type Comment struct {
 	ID           int       `json:"id"`
 	UserID       int       `json:"user_id"`
 	TweetID      int       `json:"tweet_id"`
+	Body         string    `json:"body"`
 	Likes        int       `json:"likes"`
 	Replies      int       `json:"replies"`
 	IsEdited     bool      `json:"is_edited"`
