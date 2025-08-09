@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-//go:embed templates/*
+//go:embed templates/* data/data.json
 var resources embed.FS
 
 var t = template.Must(template.ParseFS(resources, "templates/*"))
@@ -34,6 +34,17 @@ func main() {
 		}
 
 		t.ExecuteTemplate(w, "about.html.tmpl", data)
+	})
+
+	// Serve JSON data from embedded file
+	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
+		content, err := resources.ReadFile("data/data.json")
+		if err != nil {
+			http.Error(w, "failed to read data", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(content)
 	})
 
 	log.Println("listening on", port)
