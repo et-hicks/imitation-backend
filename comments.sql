@@ -1,0 +1,18 @@
+INSERT INTO comments (id, tweet_id, user_id, body, created_at) VALUES
+(1, 1, 2, 'Can''t wait to see how this boosts AI performance.', '2023-01-20 12:00:00'),
+(2, 1, 5, 'Hope smaller labs get access to these chips too.', '2023-01-21 09:10:00'),
+(3, 1, 3, 'Another step toward smarter devices.', '2023-01-22 18:25:00'),
+(4, 2, 7, 'It''s scary how fast things are changing.', '2023-02-10 10:45:00'),
+(5, 2, 8, 'Hope policymakers take this seriously.', '2023-02-11 11:20:00'),
+(6, 3, 4, 'More cities should follow this example.', '2023-03-15 13:05:00'),
+(7, 4, 9, 'Moon missions are back, excited!', '2023-04-05 09:00:00'),
+(8, 4, 2, 'I wonder if they''ll build a base this time.', '2023-04-06 14:30:00'),
+(9, 4, 6, 'Perfect time to inspire a new generation.', '2023-04-07 16:55:00'),
+(10, 4, 10, 'Hope we get live streams of the launch.', '2023-04-07 20:15:00'),
+(11, 5, 3, 'Investors seem relieved for now.', '2023-05-12 08:40:00'),
+(12, 5, 4, 'Let''s see if the momentum lasts.', '2023-05-13 09:25:00'),
+(13, 6, 6, 'Firefighters have such a tough job.', '2023-06-20 10:05:00'),
+(14, 6, 2, 'We need better forest management.', '2023-06-21 14:18:00'),
+(15, 6, 8, 'Prayers for everyone affected.', '2023-06-22 15:50:00'),
+(16, 7, 5, 'Clean energy future is looking bright!', '2023-07-18 10:10:00'),
+(17, 7, 9, 'Hope this becomes practical soon.', '2023-07-19 11:45:00');
