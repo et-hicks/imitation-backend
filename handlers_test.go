@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -46,6 +48,28 @@ func fakeSupabaseServer(t *testing.T) *httptest.Server {
 		_, _ = w.Write([]byte(genTweetsJSON(10, func(i int) (id, userID int, body string) {
 			return i + 1, i + 1, "Body"
 		})))
+	})
+
+	// Users collection for auth validation
+	mux.HandleFunc("/rest/v1/users", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if id := r.URL.Query().Get("id"); id == "eq.1" {
+			_, _ = w.Write([]byte(`[{"id":1}]`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	// Comments collection for posting comments
+	mux.HandleFunc("/rest/v1/comments", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			// Ensure body is read so client isn't left hanging
+			_, _ = io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"id":1,"user_id":1,"tweet_id":42,"body":"test"}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
 	})
 
 	return httptest.NewServer(mux)
@@ -151,5 +175,65 @@ func TestTweet1HasExpectedFields(t *testing.T) {
 	}
 	if s, ok := got["body"].(string); !ok || s != "Tech company unveils new AI chip to speed up machine learning." {
 		t.Fatalf("unexpected body: %v", got["body"])
+	}
+}
+
+func TestCreateCommentRequiresParentHeader(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	body := bytes.NewBufferString(`{"body":"hi","is_comment":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/tweet", body)
+	req.Header.Set("Authorization", "1")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCreateCommentValidatesUser(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	body := bytes.NewBufferString(`{"body":"hi","is_comment":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/tweet", body)
+	req.Header.Set("Authorization", "999")
+	req.Header.Set("Parent-Tweet-ID", "42")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCreateCommentSuccess(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	body := bytes.NewBufferString(`{"body":"hi","is_comment":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/tweet", body)
+	req.Header.Set("Authorization", "1")
+	req.Header.Set("Parent-Tweet-ID", "42")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if v, ok := got["tweet_id"].(float64); !ok || int(v) != 42 {
+		t.Fatalf("expected tweet_id=42, got %v", got["tweet_id"])
 	}
 }
