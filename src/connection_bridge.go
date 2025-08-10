@@ -31,3 +31,10 @@ func GetSupabase(ctx context.Context) (*supabase.Client, error) {
 	}
 	return sbClientSrc, nil
 }
+
+// ResetSupabaseForTests clears the cached client for tests.
+func ResetSupabaseForTests() {
+	sbClientSrc = nil
+	sbErrSrc = nil
+	sbOnceSrc = sync.Once{}
+}
