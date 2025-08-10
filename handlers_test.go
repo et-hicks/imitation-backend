@@ -72,6 +72,19 @@ func fakeSupabaseServer(t *testing.T) *httptest.Server {
 		w.WriteHeader(http.StatusBadRequest)
 	})
 
+	// user_tweet_interactions for likes/saves/restacks
+	mux.HandleFunc("/rest/v1/user_tweet_interactions", func(w http.ResponseWriter, r *http.Request) {
+		// Just acknowledge the write
+		_, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusCreated)
+	})
+
+	// user_following for follow relationships
+	mux.HandleFunc("/rest/v1/user_following", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusCreated)
+	})
+
 	return httptest.NewServer(mux)
 }
 
@@ -235,5 +248,57 @@ func TestCreateCommentSuccess(t *testing.T) {
 	}
 	if v, ok := got["tweet_id"].(float64); !ok || int(v) != 42 {
 		t.Fatalf("expected tweet_id=42, got %v", got["tweet_id"])
+	}
+}
+
+func TestLikeAuthCheck(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	req := httptest.NewRequest(http.MethodPut, "/like/2/10", nil)
+	req.Header.Set("Authorization", "1")
+	req.Header.Set("Is-Comment", "false")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodPut, "/like/1/10", nil)
+	req2.Header.Set("Authorization", "1")
+	req2.Header.Set("Is-Comment", "false")
+	rr2 := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body=%s", rr2.Code, rr2.Body.String())
+	}
+}
+
+func TestFollowAuthCheck(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	req := httptest.NewRequest(http.MethodPut, "/follow/2/3", nil)
+	req.Header.Set("Authorization", "1")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodPut, "/follow/1/3", nil)
+	req2.Header.Set("Authorization", "1")
+	rr2 := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body=%s", rr2.Code, rr2.Body.String())
 	}
 }
