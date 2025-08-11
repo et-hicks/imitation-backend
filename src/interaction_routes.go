@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	postgrest "github.com/supabase-community/postgrest-go"
 )
 
 func init() {
@@ -47,6 +49,7 @@ func likeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid target id", http.StatusBadRequest)
 		return
 	}
+	remove := strings.ToLower(r.URL.Query().Get("remove")) == "true"
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -55,16 +58,28 @@ func likeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payload := map[string]interface{}{
-		"user_id":  userID,
-		"is_liked": true,
-	}
-	if isComment {
-		payload["comment_id"] = targetID
+	var qb *postgrest.FilterBuilder
+	if remove {
+		updatePayload := map[string]interface{}{"is_liked": false}
+		qb = client.From("user_tweet_interactions").Update(updatePayload, "", "")
+		qb = qb.Eq("user_id", userIDStr)
+		if isComment {
+			qb = qb.Eq("comment_id", targetIDStr)
+		} else {
+			qb = qb.Eq("tweet_id", targetIDStr)
+		}
 	} else {
-		payload["tweet_id"] = targetID
+		payload := map[string]interface{}{
+			"user_id":  userID,
+			"is_liked": true,
+		}
+		if isComment {
+			payload["comment_id"] = targetID
+		} else {
+			payload["tweet_id"] = targetID
+		}
+		qb = client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
 	}
-	qb := client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
 	if _, _, err := qb.Execute(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,6 +113,7 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid tweet id", http.StatusBadRequest)
 		return
 	}
+	remove := strings.ToLower(r.URL.Query().Get("remove")) == "true"
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -106,12 +122,19 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payload := map[string]interface{}{
-		"user_id":  userID,
-		"tweet_id": tweetID,
-		"is_saved": true,
+	var qb *postgrest.FilterBuilder
+	if remove {
+		updatePayload := map[string]interface{}{"is_saved": false}
+		qb = client.From("user_tweet_interactions").Update(updatePayload, "", "")
+		qb = qb.Eq("user_id", userIDStr).Eq("tweet_id", tweetIDStr)
+	} else {
+		payload := map[string]interface{}{
+			"user_id":  userID,
+			"tweet_id": tweetID,
+			"is_saved": true,
+		}
+		qb = client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
 	}
-	qb := client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
 	if _, _, err := qb.Execute(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
