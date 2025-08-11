@@ -278,6 +278,32 @@ func TestLikeAuthCheck(t *testing.T) {
 	}
 }
 
+func TestUnlikeAndUnsave(t *testing.T) {
+	srv := fakeSupabaseServer(t)
+	defer srv.Close()
+	setSupabaseEnv(srv.URL)
+	api.ResetSupabaseForTests()
+
+	req := httptest.NewRequest(http.MethodPut, "/like/1/10?remove=true", nil)
+	req.Header.Set("Authorization", "1")
+	req.Header.Set("Is-Comment", "false")
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodPut, "/save/1/10?remove=true", nil)
+	req2.Header.Set("Authorization", "1")
+	rr2 := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr2, req2)
+
+	if rr2.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body=%s", rr2.Code, rr2.Body.String())
+	}
+}
+
 func TestFollowAuthCheck(t *testing.T) {
 	srv := fakeSupabaseServer(t)
 	defer srv.Close()
