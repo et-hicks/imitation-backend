@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	postgrest "github.com/supabase-community/postgrest-go"
 )
 
 func init() {
@@ -53,34 +51,29 @@ func likeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var qb *postgrest.FilterBuilder
-	if remove {
-		updatePayload := map[string]interface{}{"is_liked": false}
-		qb = client.From("user_tweet_interactions").Update(updatePayload, "", "")
-		qb = qb.Eq("user_id", userIDStr)
-		if isComment {
-			qb = qb.Eq("comment_id", targetIDStr)
+	var query string
+	var args []any
+	if isComment {
+		if remove {
+			query = "INSERT INTO user_tweet_interactions (user_id, comment_id, is_liked) VALUES (?, ?, 0) ON CONFLICT(user_id, comment_id) DO UPDATE SET is_liked=0"
 		} else {
-			qb = qb.Eq("tweet_id", targetIDStr)
+			query = "INSERT INTO user_tweet_interactions (user_id, comment_id, is_liked) VALUES (?, ?, 1) ON CONFLICT(user_id, comment_id) DO UPDATE SET is_liked=1"
 		}
+		args = []any{userID, targetID}
 	} else {
-		payload := map[string]interface{}{
-			"user_id":  userID,
-			"is_liked": true,
-		}
-		if isComment {
-			payload["comment_id"] = targetID
+		if remove {
+			query = "INSERT INTO user_tweet_interactions (user_id, tweet_id, is_liked) VALUES (?, ?, 0) ON CONFLICT(user_id, tweet_id) DO UPDATE SET is_liked=0"
 		} else {
-			payload["tweet_id"] = targetID
+			query = "INSERT INTO user_tweet_interactions (user_id, tweet_id, is_liked) VALUES (?, ?, 1) ON CONFLICT(user_id, tweet_id) DO UPDATE SET is_liked=1"
 		}
-		qb = client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
+		args = []any{userID, targetID}
 	}
-	if _, _, err := qb.Execute(); err != nil {
+	if _, err := db.ExecContext(ctx, query, args...); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -117,25 +110,18 @@ func saveHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var qb *postgrest.FilterBuilder
+	var query string
 	if remove {
-		updatePayload := map[string]interface{}{"is_saved": false}
-		qb = client.From("user_tweet_interactions").Update(updatePayload, "", "")
-		qb = qb.Eq("user_id", userIDStr).Eq("tweet_id", tweetIDStr)
+		query = "INSERT INTO user_tweet_interactions (user_id, tweet_id, is_saved) VALUES (?, ?, 0) ON CONFLICT(user_id, tweet_id) DO UPDATE SET is_saved=0"
 	} else {
-		payload := map[string]interface{}{
-			"user_id":  userID,
-			"tweet_id": tweetID,
-			"is_saved": true,
-		}
-		qb = client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
+		query = "INSERT INTO user_tweet_interactions (user_id, tweet_id, is_saved) VALUES (?, ?, 1) ON CONFLICT(user_id, tweet_id) DO UPDATE SET is_saved=1"
 	}
-	if _, _, err := qb.Execute(); err != nil {
+	if _, err := db.ExecContext(ctx, query, userID, tweetID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -171,18 +157,13 @@ func restackHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payload := map[string]interface{}{
-		"user_id":      userID,
-		"tweet_id":     tweetID,
-		"is_restacked": true,
-	}
-	qb := client.From("user_tweet_interactions").Insert(payload, true, "user_id,tweet_id,comment_id", "", "")
-	if _, _, err := qb.Execute(); err != nil {
+	query := "INSERT INTO user_tweet_interactions (user_id, tweet_id, is_restacked) VALUES (?, ?, 1) ON CONFLICT(user_id, tweet_id) DO UPDATE SET is_restacked=1"
+	if _, err := db.ExecContext(ctx, query, userID, tweetID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -218,17 +199,13 @@ func followHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	payload := map[string]interface{}{
-		"user_id":           userID,
-		"following_user_id": followID,
-	}
-	qb := client.From("user_following").Insert(payload, true, "user_id,following_user_id", "", "")
-	if _, _, err := qb.Execute(); err != nil {
+	query := "INSERT INTO user_following (user_id, following_user_id) VALUES (?, ?) ON CONFLICT(user_id, following_user_id) DO NOTHING"
+	if _, err := db.ExecContext(ctx, query, userID, followID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

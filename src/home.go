@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	postgrest "github.com/supabase-community/postgrest-go"
 )
 
 func init() {
@@ -21,17 +19,51 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	rows, err := db.QueryContext(ctx, `
+SELECT
+    t.id,
+    t.user_id,
+    t.body,
+    t.likes,
+    t.saves,
+    t.restacks,
+    t.replies,
+    t.is_edited,
+    t.created_at,
+    t.last_edited_at,
+    u.id,
+    u.created_at,
+    u.username,
+    u.profile_name,
+    u.profile_url,
+    u.bio
+FROM tweets t
+JOIN users u ON u.id = t.user_id
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT 10
+`)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
 	var tweets []TweetWithUser
-	qb := client.From("tweets").Select("*,users(*)", "", false)
-	qb = qb.Order("created_at", &postgrest.OrderOpts{Ascending: false})
-	qb = qb.Limit(10, "")
-	if _, err := qb.ExecuteTo(&tweets); err != nil {
+	for rows.Next() {
+		tweet, err := scanTweetWithUser(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tweets = append(tweets, tweet)
+	}
+	if err := rows.Err(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

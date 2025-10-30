@@ -7,6 +7,12 @@ RUN set -eux; \
     echo "[builder] Go version:"; go version; \
     echo "[builder] Go env:"; go env
 
+# Install build dependencies for SQLite CGO bindings
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends build-essential libsqlite3-dev; \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy module files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
@@ -16,10 +22,10 @@ RUN go build -v -o /run-app .
 
 FROM debian:bookworm
 
-# Install CA bundle so HTTPS (Supabase) certs verify correctly
+# Install runtime dependencies for SQLite and TLS
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates; \
+    apt-get install -y --no-install-recommends ca-certificates sqlite3 libsqlite3-0; \
     update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
