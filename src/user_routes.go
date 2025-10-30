@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
-
-	postgrest "github.com/supabase-community/postgrest-go"
 )
 
 func init() {
@@ -45,18 +44,58 @@ func userTweets(w http.ResponseWriter, r *http.Request, userID string) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	uid, err := strconv.Atoi(userID)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	rows, err := db.QueryContext(ctx, `
+SELECT
+    t.id,
+    t.user_id,
+    t.body,
+    t.likes,
+    t.saves,
+    t.restacks,
+    t.replies,
+    t.is_edited,
+    t.created_at,
+    t.last_edited_at,
+    u.id,
+    u.created_at,
+    u.username,
+    u.profile_name,
+    u.profile_url,
+    u.bio
+FROM tweets t
+JOIN users u ON u.id = t.user_id
+WHERE t.user_id = ?
+ORDER BY t.created_at DESC, t.id DESC
+LIMIT 10
+`, uid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
 	var tweets []TweetWithUser
-	qb := client.From("tweets").Select("*,users(*)", "", false)
-	qb = qb.Eq("user_id", userID)
-	qb = qb.Order("created_at", &postgrest.OrderOpts{Ascending: false})
-	qb = qb.Limit(10, "")
-	if _, err := qb.ExecuteTo(&tweets); err != nil {
+	for rows.Next() {
+		tweet, err := scanTweetWithUser(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tweets = append(tweets, tweet)
+	}
+	if err := rows.Err(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -81,16 +120,26 @@ func updateBio(w http.ResponseWriter, r *http.Request, userID string) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	uid, err := strconv.Atoi(userID)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	qb := client.From("users").Update(map[string]string{"bio": payload.Bio}, "", "")
-	qb = qb.Eq("id", userID)
-	if _, _, err := qb.Execute(); err != nil {
+	res, err := db.ExecContext(ctx, "UPDATE users SET bio = ? WHERE id = ?", payload.Bio, uid)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if count, err := res.RowsAffected(); err == nil && count == 0 {
+		http.NotFound(w, r)
 		return
 	}
 

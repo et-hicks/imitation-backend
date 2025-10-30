@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/et-hicks/imitation-backend/models"
-	postgrest "github.com/supabase-community/postgrest-go"
 )
 
 func init() {
@@ -44,25 +43,51 @@ func tweetHandler(w http.ResponseWriter, r *http.Request) {
 // fetchTweet returns a specific tweet with user info.
 func fetchTweet(w http.ResponseWriter, r *http.Request, tweetID string) {
 	log.Println("inilizied request")
+	tid, err := strconv.Atoi(tweetID)
+	if err != nil {
+		http.Error(w, "invalid tweet id", http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	qb := client.From("tweets").Select("*,users(*)", "", false)
-	qb = qb.Eq("id", tweetID)
-	data, _, err := qb.Single().Execute()
+	row := db.QueryRowContext(ctx, `
+SELECT
+    t.id,
+    t.user_id,
+    t.body,
+    t.likes,
+    t.saves,
+    t.restacks,
+    t.replies,
+    t.is_edited,
+    t.created_at,
+    t.last_edited_at,
+    u.id,
+    u.created_at,
+    u.username,
+    u.profile_name,
+    u.profile_url,
+    u.bio
+FROM tweets t
+JOIN users u ON u.id = t.user_id
+WHERE t.id = ?
+`, tid)
+
+	tweet, err := scanTweetWithUser(row)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var tweet TweetWithUser
-	if err := json.Unmarshal(data, &tweet); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -75,21 +100,60 @@ func fetchTweet(w http.ResponseWriter, r *http.Request, tweetID string) {
 // fetchComments returns comments for a tweet.
 func fetchComments(w http.ResponseWriter, r *http.Request, tweetID string) {
 	log.Println("inilizied request")
+	tid, err := strconv.Atoi(tweetID)
+	if err != nil {
+		http.Error(w, "invalid tweet id", http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	rows, err := db.QueryContext(ctx, `
+SELECT
+    c.id,
+    c.user_id,
+    c.tweet_id,
+    c.body,
+    c.likes,
+    c.replies,
+    c.is_edited,
+    c.last_edited_at,
+    c.created_at,
+    u.id,
+    u.created_at,
+    u.username,
+    u.profile_name,
+    u.profile_url,
+    u.bio
+FROM comments c
+JOIN users u ON u.id = c.user_id
+WHERE c.tweet_id = ?
+ORDER BY c.created_at DESC, c.id DESC
+`, tid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
 	var comments []CommentWithUser
-	qb := client.From("comments").Select("*,users(*)", "", false)
-	qb = qb.Eq("tweet_id", tweetID)
-	qb = qb.Order("created_at", &postgrest.OrderOpts{Ascending: false})
-	if _, err := qb.ExecuteTo(&comments); err != nil {
+	for rows.Next() {
+		comment, err := scanCommentWithUser(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		comments = append(comments, comment)
+	}
+	if err := rows.Err(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -116,7 +180,11 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve user auth information from headers
+	if strings.TrimSpace(payload.Body) == "" {
+		http.Error(w, "body is required", http.StatusBadRequest)
+		return
+	}
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "missing authorization", http.StatusUnauthorized)
@@ -133,15 +201,22 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	client, err := GetSupabase(ctx)
+	db, err := GetDB(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// When posting a comment, validate the user and require parent tweet ID
+	if err := ensureUserExists(ctx, db, userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if payload.IsComment {
-		// Ensure parent tweet id is provided in headers
 		parentIDStr := r.Header.Get("Parent-Tweet-ID")
 		if parentIDStr == "" {
 			http.Error(w, "missing parent tweet id", http.StatusBadRequest)
@@ -153,25 +228,33 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Validate that the user exists in the database
-		if _, _, err := client.From("users").Select("id", "", false).Eq("id", strconv.Itoa(userID)).Single().Execute(); err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		res, err := db.ExecContext(ctx, "INSERT INTO comments (user_id, tweet_id, body) VALUES (?, ?, ?)", userID, parentID, payload.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		qb := client.From("comments").Insert(map[string]interface{}{
-			"user_id":  userID,
-			"tweet_id": parentID,
-			"body":     payload.Body,
-		}, false, "", "", "")
-		data, _, err := qb.Single().Execute()
+		commentID, err := res.LastInsertId()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		var comment models.Comment
-		if err := json.Unmarshal(data, &comment); err != nil {
+		row := db.QueryRowContext(ctx, `
+SELECT
+    id,
+    user_id,
+    tweet_id,
+    body,
+    likes,
+    replies,
+    is_edited,
+    last_edited_at,
+    created_at
+FROM comments
+WHERE id = ?
+`, commentID)
+		comment, err := scanComment(row)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -182,18 +265,34 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	qb := client.From("tweets").Insert(map[string]interface{}{
-		"user_id": userID,
-		"body":    payload.Body,
-	}, false, "", "", "")
-	data, _, err := qb.Single().Execute()
+	res, err := db.ExecContext(ctx, "INSERT INTO tweets (user_id, body) VALUES (?, ?)", userID, payload.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	tweetIDVal, err := res.LastInsertId()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	var tweet models.Tweet
-	if err := json.Unmarshal(data, &tweet); err != nil {
+	row := db.QueryRowContext(ctx, `
+SELECT
+    id,
+    user_id,
+    body,
+    likes,
+    saves,
+    restacks,
+    replies,
+    is_edited,
+    created_at,
+    last_edited_at
+FROM tweets
+WHERE id = ?
+`, tweetIDVal)
+	tweet, err := scanTweet(row)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -201,4 +300,9 @@ func createTweet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweet)
 	log.Println("sent successfully")
+}
+
+func ensureUserExists(ctx context.Context, db *sql.DB, userID int) error {
+	var id int
+	return db.QueryRowContext(ctx, "SELECT id FROM users WHERE id = ?", userID).Scan(&id)
 }
