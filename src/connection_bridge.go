@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     profile_name TEXT,
     profile_url TEXT,
     bio TEXT
@@ -166,6 +167,42 @@ func applySchema(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("run schema: %w", err)
 		}
+	}
+	if err := ensurePasswordColumn(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensurePasswordColumn(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, "PRAGMA table_info(users)")
+	if err != nil {
+		return fmt.Errorf("describe users: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			defaultVal sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultVal, &primaryKey); err != nil {
+			return fmt.Errorf("scan users info: %w", err)
+		}
+		if name == "password_hash" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate users info: %w", err)
+	}
+
+	if _, err := db.ExecContext(ctx, "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("add password column: %w", err)
 	}
 	return nil
 }

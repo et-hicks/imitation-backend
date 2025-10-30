@@ -42,8 +42,12 @@ func cleanupTables(t *testing.T, db *sql.DB) {
 
 func insertUser(t *testing.T, db *sql.DB, id int) {
 	t.Helper()
-	_, err := db.Exec(`INSERT INTO users (id, username, profile_name, profile_url, bio) VALUES (?, ?, ?, ?, ?)`,
-		id, fmt.Sprintf("user%d", id), fmt.Sprintf("User %d", id), "", "")
+	hash, err := api.HashPasswordForTests("password123")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO users (id, username, password_hash, profile_name, profile_url, bio) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, fmt.Sprintf("user%d", id), hash, fmt.Sprintf("User %d", id), "", "")
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -187,6 +191,54 @@ func TestCreateCommentSuccess(t *testing.T) {
 	}
 	if v, ok := got["tweet_id"].(float64); !ok || int(v) != 42 {
 		t.Fatalf("expected tweet_id=42, got %v", got["tweet_id"])
+	}
+}
+
+func TestSignupHashesPassword(t *testing.T) {
+	db := setupTestDB(t)
+
+	body := bytes.NewBufferString(`{"username":"newuser","password":"super-secret"}`)
+	req := httptest.NewRequest(http.MethodPost, "/auth/signup", body)
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	var hash string
+	if err := db.QueryRow(`SELECT password_hash FROM users WHERE username = ?`, "newuser").Scan(&hash); err != nil {
+		t.Fatalf("lookup user: %v", err)
+	}
+	if hash == "" {
+		t.Fatalf("password hash should not be empty")
+	}
+	if hash == "super-secret" {
+		t.Fatalf("password hash stored in plaintext")
+	}
+	if !api.VerifyPasswordForTests(hash, "super-secret") {
+		t.Fatalf("stored hash does not validate password")
+	}
+}
+
+func TestLoginValidatesPassword(t *testing.T) {
+	db := setupTestDB(t)
+
+	hash, err := api.HashPasswordForTests("letmein")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, "login_user", hash); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	body := bytes.NewBufferString(`{"username":"login_user","password":"letmein"}`)
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", body)
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
 	}
 }
 
