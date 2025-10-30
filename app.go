@@ -10,7 +10,7 @@ import (
 	_ "github.com/et-hicks/imitation-backend/src"
 )
 
-//go:embed templates/*
+//go:embed templates/* docs/*
 var resources embed.FS
 
 var t = template.Must(template.ParseFS(resources, "templates/*"))
@@ -23,11 +23,17 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		data := map[string]string{
-			"Region": os.Getenv("FLY_REGION"),
-		}
+		t.ExecuteTemplate(w, "index.html.tmpl", nil)
+	})
 
-		t.ExecuteTemplate(w, "index.html.tmpl", data)
+	http.HandleFunc("/docs/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		content, err := resources.ReadFile("docs/openapi.json")
+		if err != nil {
+			http.Error(w, "failed to read openapi spec", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(content)
 	})
 
 	http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {

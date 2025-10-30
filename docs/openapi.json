@@ -1,0 +1,680 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Imitation Backend API",
+    "version": "1.0.0",
+    "description": "API documentation for the imitation backend service."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "summary": "Create a new user account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "409": {
+            "description": "Username already exists"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate an existing user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credentials"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/home": {
+      "get": {
+        "summary": "List the most recent tweets",
+        "responses": {
+          "200": {
+            "description": "A list of tweets with author information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TweetWithUser"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/{id}": {
+      "get": {
+        "summary": "List the latest tweets for a user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweets for the specified user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TweetWithUser"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/user/{id}/bio": {
+      "post": {
+        "summary": "Update a user's bio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Bio updated"
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/tweet": {
+      "post": {
+        "summary": "Create a tweet or comment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthHeader"
+          },
+          {
+            "name": "Parent-Tweet-ID",
+            "in": "header",
+            "required": false,
+            "description": "Required when creating a comment",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTweetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created tweet or comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Tweet"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Comment"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload"
+          },
+          "401": {
+            "description": "Authorization failed"
+          }
+        }
+      }
+    },
+    "/tweet/{id}": {
+      "get": {
+        "summary": "Fetch a tweet with author information",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweet details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TweetWithUser"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tweet not found"
+          }
+        }
+      }
+    },
+    "/tweet/{id}/comments": {
+      "get": {
+        "summary": "List comments for a tweet",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comments with author information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommentWithUser"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/like/{userId}/{targetId}": {
+      "put": {
+        "summary": "Like or unlike a tweet or comment",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/AuthHeader"
+          },
+          {
+            "name": "Is-Comment",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "remove",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "When true, removes an existing like"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Like state updated"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authorization failed"
+          }
+        }
+      }
+    },
+    "/save/{userId}/{tweetId}": {
+      "put": {
+        "summary": "Save or unsave a tweet",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "tweetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/AuthHeader"
+          },
+          {
+            "name": "remove",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "When true, removes a saved tweet"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Save state updated"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authorization failed"
+          }
+        }
+      }
+    },
+    "/restack/{userId}/{tweetId}": {
+      "put": {
+        "summary": "Restack a tweet",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "tweetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/AuthHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tweet restacked"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authorization failed"
+          }
+        }
+      }
+    },
+    "/follow/{userId}/{followId}": {
+      "put": {
+        "summary": "Follow another user",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "followId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/AuthHeader"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Follow relationship stored"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authorization failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "username": {
+            "type": "string"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "profile_url": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "username"
+        ]
+      },
+      "Tweet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "likes": {
+            "type": "integer"
+          },
+          "saves": {
+            "type": "integer"
+          },
+          "restacks": {
+            "type": "integer"
+          },
+          "replies": {
+            "type": "integer"
+          },
+          "is_edited": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_edited_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "body"
+        ]
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "integer"
+          },
+          "tweet_id": {
+            "type": "integer"
+          },
+          "body": {
+            "type": "string"
+          },
+          "likes": {
+            "type": "integer"
+          },
+          "replies": {
+            "type": "integer"
+          },
+          "is_edited": {
+            "type": "boolean"
+          },
+          "last_edited_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "tweet_id",
+          "body"
+        ]
+      },
+      "TweetWithUser": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Tweet"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "users": {
+                "$ref": "#/components/schemas/User"
+              }
+            },
+            "required": [
+              "users"
+            ]
+          }
+        ]
+      },
+      "CommentWithUser": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Comment"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "users": {
+                "$ref": "#/components/schemas/User"
+              }
+            },
+            "required": [
+              "users"
+            ]
+          }
+        ]
+      },
+      "Credentials": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ]
+      },
+      "UpdateBioRequest": {
+        "type": "object",
+        "properties": {
+          "bio": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bio"
+        ]
+      },
+      "CreateTweetRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "is_comment": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "body",
+          "is_comment"
+        ]
+      }
+    },
+    "parameters": {
+      "AuthHeader": {
+        "name": "Authorization",
+        "in": "header",
+        "description": "Numeric user identifier",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
