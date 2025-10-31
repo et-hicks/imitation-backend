@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 func init() {
 	http.HandleFunc("/user/", userHandler)
+	http.HandleFunc("/users/", usersHandler)
 }
 
 // userHandler dispatches user related routes.
@@ -56,33 +58,96 @@ func userTweets(w http.ResponseWriter, r *http.Request, userID string) {
 		return
 	}
 
-	rows, err := db.QueryContext(ctx, `
-SELECT
-    t.id,
-    t.user_id,
-    t.body,
-    t.likes,
-    t.saves,
-    t.restacks,
-    t.replies,
-    t.is_edited,
-    t.created_at,
-    t.last_edited_at,
-    u.id,
-    u.created_at,
-    u.username,
-    u.profile_name,
-    u.profile_url,
-    u.bio
-FROM tweets t
-JOIN users u ON u.id = t.user_id
-WHERE t.user_id = ?
-ORDER BY t.created_at DESC, t.id DESC
-LIMIT 10
-`, uid)
+	tweets, err := fetchTweets(ctx, db, UserTweetsSelect+"\nLIMIT 10", uid)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(tweets)
+	log.Println("sent successfully")
+}
+
+// usersHandler dispatches requests for plural user resources.
+func usersHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 3 {
+		http.NotFound(w, r)
+		return
+	}
+
+	if parts[0] != "users" {
+		http.NotFound(w, r)
+		return
+	}
+
+	uid, err := strconv.Atoi(parts[1])
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch parts[2] {
+	case "tweets":
+		handleUserTweets(w, r, uid)
+	case "likes":
+		handleUserLikes(w, r, uid)
+	case "bookmarks":
+		handleUserBookmarks(w, r, uid)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func handleUserTweets(w http.ResponseWriter, r *http.Request, userID int) {
+	tweets, err := fetchTweetsForUser(r.Context(), UserTweetsSelect, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeTweetsResponse(w, tweets)
+}
+
+func handleUserLikes(w http.ResponseWriter, r *http.Request, userID int) {
+	tweets, err := fetchTweetsForUser(r.Context(), UserLikedTweetsSelect, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeTweetsResponse(w, tweets)
+}
+
+func handleUserBookmarks(w http.ResponseWriter, r *http.Request, userID int) {
+	tweets, err := fetchTweetsForUser(r.Context(), UserBookmarkedTweetsSelect, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeTweetsResponse(w, tweets)
+}
+
+func fetchTweetsForUser(ctx context.Context, query string, userID int) ([]TweetWithUser, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	db, err := GetDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return fetchTweets(ctx, db, query, userID)
+}
+
+func fetchTweets(ctx context.Context, db *sql.DB, query string, args ...any) ([]TweetWithUser, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -90,16 +155,17 @@ LIMIT 10
 	for rows.Next() {
 		tweet, err := scanTweetWithUser(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 		tweets = append(tweets, tweet)
 	}
 	if err := rows.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
+	return tweets, nil
+}
 
+func writeTweetsResponse(w http.ResponseWriter, tweets []TweetWithUser) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(tweets)
 	log.Println("sent successfully")

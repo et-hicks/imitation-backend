@@ -167,6 +167,105 @@
         }
       }
     },
+    "/users/{userId}/tweets": {
+      "get": {
+        "summary": "List all tweets authored by a user",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweets authored by the specified user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TweetWithUser"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id"
+          }
+        }
+      }
+    },
+    "/users/{userId}/likes": {
+      "get": {
+        "summary": "List tweets liked by a user",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweets liked by the specified user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TweetWithUser"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id"
+          }
+        }
+      }
+    },
+    "/users/{userId}/bookmarks": {
+      "get": {
+        "summary": "List tweets bookmarked by a user",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tweets bookmarked by the specified user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TweetWithUser"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id"
+          }
+        }
+      }
+    },
     "/tweet": {
       "post": {
         "summary": "Create a tweet or comment",

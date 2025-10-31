@@ -44,6 +44,10 @@ func main() {
 		t.ExecuteTemplate(w, "about.html.tmpl", data)
 	})
 
+	http.HandleFunc("/signup", func(w http.ResponseWriter, r *http.Request) {
+		t.ExecuteTemplate(w, "signup.html.tmpl", nil)
+	})
+
 	// Serve JSON data from embedded file
 	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
 		content, err := resources.ReadFile("data/data.json")

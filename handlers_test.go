@@ -61,6 +61,18 @@ func insertTweet(t *testing.T, db *sql.DB, id, userID int, body string) {
 	}
 }
 
+func seedUsersAndTweets(t *testing.T, db *sql.DB, userCount, tweetsPerUser int) {
+	t.Helper()
+	tweetID := 1
+	for user := 1; user <= userCount; user++ {
+		insertUser(t, db, user)
+		for i := 0; i < tweetsPerUser; i++ {
+			insertTweet(t, db, tweetID, user, fmt.Sprintf("User %d tweet %d", user, i+1))
+			tweetID++
+		}
+	}
+}
+
 func TestHomeReturnsTen(t *testing.T) {
 	db := setupTestDB(t)
 	for i := 1; i <= 10; i++ {
@@ -314,5 +326,144 @@ func TestFollowAuthCheck(t *testing.T) {
 
 	if rr2.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body=%s", rr2.Code, rr2.Body.String())
+	}
+}
+
+func TestUserTweetsQueryAndEndpoint(t *testing.T) {
+	db := setupTestDB(t)
+	seedUsersAndTweets(t, db, 5, 5)
+
+	userID := 3
+
+	rows, err := db.Query(api.UserTweetsSelect, userID)
+	if err != nil {
+		t.Fatalf("query tweets: %v", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate tweets: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("want 5 tweets from SQL, got %d", count)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/users/3/tweets", nil)
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("want 5 tweets from endpoint, got %d", len(got))
+	}
+	for i, row := range got {
+		if v, ok := row["user_id"].(float64); !ok || int(v) != userID {
+			t.Fatalf("row %d: want user_id=%d, got %v", i, userID, row["user_id"])
+		}
+	}
+}
+
+func TestUserBookmarksQueryAndEndpoint(t *testing.T) {
+	db := setupTestDB(t)
+	seedUsersAndTweets(t, db, 5, 5)
+
+	userID := 1
+	firstForeignTweetID := 6 // tweets from user 2
+	for i := 0; i < 5; i++ {
+		tweetID := firstForeignTweetID + i
+		if _, err := db.Exec(`INSERT INTO user_tweet_interactions (user_id, tweet_id, is_saved) VALUES (?, ?, 1)`, userID, tweetID); err != nil {
+			t.Fatalf("insert bookmark: %v", err)
+		}
+	}
+
+	rows, err := db.Query(api.UserBookmarkedTweetsSelect, userID)
+	if err != nil {
+		t.Fatalf("query bookmarks: %v", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate bookmarks: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("want 5 bookmarks from SQL, got %d", count)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/users/1/bookmarks", nil)
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("want 5 bookmarks from endpoint, got %d", len(got))
+	}
+}
+
+func TestUserLikesQueryAndEndpoint(t *testing.T) {
+	db := setupTestDB(t)
+	seedUsersAndTweets(t, db, 5, 5)
+
+	userID := 2
+	startTweetID := 11 // tweets from user 3
+	for i := 0; i < 5; i++ {
+		tweetID := startTweetID + i
+		if _, err := db.Exec(`INSERT INTO user_tweet_interactions (user_id, tweet_id, is_liked) VALUES (?, ?, 1)`, userID, tweetID); err != nil {
+			t.Fatalf("insert like: %v", err)
+		}
+	}
+
+	rows, err := db.Query(api.UserLikedTweetsSelect, userID)
+	if err != nil {
+		t.Fatalf("query likes: %v", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate likes: %v", err)
+	}
+	if count != 5 {
+		t.Fatalf("want 5 likes from SQL, got %d", count)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/users/2/likes", nil)
+	rr := httptest.NewRecorder()
+	http.DefaultServeMux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("want 5 likes from endpoint, got %d", len(got))
 	}
 }
